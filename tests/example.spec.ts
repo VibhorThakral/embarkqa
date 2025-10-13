@@ -121,11 +121,32 @@ test('Fill in the application form', async ({ browser }) => {
   // Date Field
   // await page.fill('input[aria-label="Date Field"]', '01/01/2025');
   
+// Date Field 
+const dateField = page.getByLabel('Date Field').first();
+const mmddyyyy = '10/12/2025'; 
+
+await dateField.click({ force: true });
+
+const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+await dateField.press(`${mod}+KeyA`);
+await dateField.press('Delete');
+
+await dateField.type(mmddyyyy, { delay: 15 });
+
+await dateField.blur();
+
+
+//Decimal Field
+const decimalField = page.locator('input[aria-label="Decimal Field"]');
+await decimalField.fill('1234.56');
+await expect(decimalField).toHaveValue('1234.56');
+ 
+
+
   // Click on the Save and Next button
   await page.click('button[id="save-and-next"]');
   await page.waitForTimeout(5000);
   await expect(page).toHaveTitle('Automated Testing Application - Review');
-  
   
   
   
