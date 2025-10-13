@@ -116,7 +116,7 @@ test('Fill in the application form', async ({ browser }) => {
   await multiSelectField_2.check();
   await multiSelectField_0.uncheck(); 
   await multiSelectField_1.uncheck(); 
-  await multiSelectField_2.uncheck(); 
+  await multiSelectField_2.uncheck();
 
   // Date Field
   // await page.fill('input[aria-label="Date Field"]', '01/01/2025');
