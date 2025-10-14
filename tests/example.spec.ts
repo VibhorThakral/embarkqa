@@ -1,4 +1,5 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Locator } from '@playwright/test';
+import path from 'path';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -141,6 +142,53 @@ const decimalField = page.locator('input[aria-label="Decimal Field"]');
 await decimalField.fill('1234.56');
 await expect(decimalField).toHaveValue('1234.56');
  
+
+//Upload Files Field
+
+
+const fx = (...p: string[]) => path.resolve(__dirname, 'fixtures', ...p);
+
+// Get the uploader section by its visible label text in the left column
+function uploaderSection(page: any, labelText: string): Locator {
+  return page.locator(`text=${labelText}`).first()
+    .locator('xpath=ancestor::*[self::div or self::section][1]');
+}
+
+// Delete/trash icons inside an upload widget
+function deleteIcons(container: Locator): Locator {
+  return container.locator(
+    [
+      '[aria-label*="delete" i]',
+      '[title*="delete" i]',
+      '[aria-label*="remove" i]',
+      '[title*="remove" i]',
+      'button:has([class*="trash"])',
+      '.fa-trash, .icon-trash, [class*="trash"]'
+    ].join(', ')
+  );
+}
+
+// Clear existing uploaded files (so runs don't accumulate rows)
+async function clearUploads(container: Locator) {
+  while (await deleteIcons(container).count()) {
+    const n = await deleteIcons(container).count();
+    await deleteIcons(container).first().click();
+    await expect(deleteIcons(container)).toHaveCount(n - 1, { timeout: 5000 });
+  }
+}
+
+// Wait until the widget finishes (no "processing/converting" text and expected row count)
+async function waitUntilUploadCount(
+  container: Locator,
+  expected: number,
+  timeout = 60_000
+) {
+  await container.getByText(/processing|converting|prepar/i)
+    .waitFor({ state: 'hidden', timeout })
+    .catch(() => {}); // ignore if not shown
+  await expect(deleteIcons(container)).toHaveCount(expected, { timeout });
+}
+
 
 
   // Click on the Save and Next button
