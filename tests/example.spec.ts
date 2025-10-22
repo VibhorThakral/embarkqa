@@ -119,88 +119,88 @@ test('Fill in the application form', async ({ browser }) => {
   await multiSelectField_1.uncheck(); 
   await multiSelectField_2.uncheck();
 
-  // Date Field
-  // await page.fill('input[aria-label="Date Field"]', '01/01/2025');
-  
 // Date Field 
-const dateField = page.getByLabel('Date Field').first();
-const mmddyyyy = '10/12/2025'; 
-
-await dateField.click({ force: true });
-
-const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
-await dateField.press(`${mod}+KeyA`);
-await dateField.press('Delete');
-
-await dateField.type(mmddyyyy, { delay: 15 });
-
-await dateField.blur();
-
+  const dateField = page.getByLabel('Date Field').first();
+  const mmddyyyy = '10/12/2025'; 
+  await dateField.click({ force: true });
+  await dateField.clear();
+  await dateField.type(mmddyyyy, { delay: 15 });
+  await dateField.blur();
 
 //Decimal Field
-const decimalField = page.locator('input[aria-label="Decimal Field"]');
-await decimalField.fill('1234.56');
-await expect(decimalField).toHaveValue('1234.56');
+  const decimalField = page.locator('input[aria-label="Decimal Field"]');
+  await decimalField.clear();
+  await decimalField.fill('1234.56');
+  await expect(decimalField).toHaveValue('1234.56');
  
+// Upload Files Fields
 
-//Upload Files Field
+const fx = (filename: string) => path.resolve(__dirname, 'fixtures', filename);
 
-
-const fx = (...p: string[]) => path.resolve(__dirname, 'fixtures', ...p);
-
-// Get the uploader section by its visible label text in the left column
-function uploaderSection(page: any, labelText: string): Locator {
-  return page.locator(`text=${labelText}`).first()
+const section = (heading: string) =>
+  page.getByText(heading).first()
     .locator('xpath=ancestor::*[self::div or self::section][1]');
+
+const trashLinks = (container: Locator) =>
+  container.locator('a.pull-right:has(span.sr-only:has-text("Remove File"))');
+
+async function waitStagesDone(container: Locator, totalTimeout = 30_000) {
+  const start = Date.now();
+  const remain = () => Math.max(1000, totalTimeout - (Date.now() - start));
+  const stage = container.getByText(/Uploading|Converting/i);
+
+  await stage.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => {});
+  await stage.waitFor({ state: 'hidden',  timeout: remain() }).catch(() => {});
 }
 
-// Delete/trash icons inside an upload widget
-function deleteIcons(container: Locator): Locator {
-  return container.locator(
-    [
-      '[aria-label*="delete" i]',
-      '[title*="delete" i]',
-      '[aria-label*="remove" i]',
-      '[title*="remove" i]',
-      'button:has([class*="trash"])',
-      '.fa-trash, .icon-trash, [class*="trash"]'
-    ].join(', ')
-  );
-}
+async function clearAllByTrash(container: Locator) {
+  for (let i = 0; i < 30; i++) { // safety cap
+    const n = await trashLinks(container).count();
+    if (n === 0) break;
 
-// Clear existing uploaded files (so runs don't accumulate rows)
-async function clearUploads(container: Locator) {
-  while (await deleteIcons(container).count()) {
-    const n = await deleteIcons(container).count();
-    await deleteIcons(container).first().click();
-    await expect(deleteIcons(container)).toHaveCount(n - 1, { timeout: 5000 });
+    await trashLinks(container).first().click();
+    await expect(trashLinks(container)).toHaveCount(n - 1, { timeout: 10_000 });
+    await waitStagesDone(container, 15_000);
   }
+  await expect(trashLinks(container)).toHaveCount(0, { timeout: 10_000 });
 }
 
-// Wait until the widget finishes (no "processing/converting" text and expected row count)
-async function waitUntilUploadCount(
-  container: Locator,
-  expected: number,
-  timeout = 60_000
-) {
-  await container.getByText(/processing|converting|prepar/i)
-    .waitFor({ state: 'hidden', timeout })
-    .catch(() => {}); // ignore if not shown
-  await expect(deleteIcons(container)).toHaveCount(expected, { timeout });
+// Single File Upload
+{
+  const single = section('Image or Doc Single');
+  const singleInput = single.locator('input[aria-label="Image or Doc Single Upload File Field"]');
+
+  await clearAllByTrash(single);
+
+  await singleInput.setInputFiles(fx('sample3.pdf'));
+
+  await waitStagesDone(single);
+  await expect(trashLinks(single)).toHaveCount(1, { timeout: 15_000 });
+}
+
+// Multiple File Upload
+{
+  const multi = section('Image or Doc Multiple');
+  const multiInput = multi.locator('input[aria-label="Image or Doc Multiple Upload File Field"]');
+
+  await clearAllByTrash(multi);
+
+  await multiInput.setInputFiles([
+    fx('sample1.docx'),
+    fx('sample3.pdf'),
+  ]);
+
+  await waitStagesDone(multi);
+  await expect(trashLinks(multi)).toHaveCount(2, { timeout: 15_000 });
 }
 
 
-
-  // Click on the Save and Next button
+// Click on the Save and Next button
   await page.click('button[id="save-and-next"]');
   await page.waitForTimeout(5000);
   await expect(page).toHaveTitle('Automated Testing Application - Review');
   
-  
-  
-  // Date Field
-  // await page.fill('input[aria-label="Date Field"]', '01/01/2025');
-  // 
+
   // Number Field
   // await page.fill('input[aria-label="Number Field"]', '1234567890');
   
