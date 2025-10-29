@@ -1,4 +1,4 @@
-import { test, expect, Locator } from '@playwright/test';
+import { test, expect, Locator, defineConfig, devices } from '@playwright/test';
 import path from 'path';
 
 test.describe.configure({ mode: 'serial' });
@@ -192,6 +192,88 @@ async function clearAllByTrash(container: Locator) {
 
   await waitStagesDone(multi);
   await expect(trashLinks(multi)).toHaveCount(2, { timeout: 15_000 });
+}
+
+// VIDEO RECORDING FIELD  
+
+// Helper: locate the section by heading
+const sectionByHeading = (page: any, heading: string) =>
+  page.getByText(heading).first()
+    .locator('xpath=ancestor::*[self::div or self::section][1]');
+
+// Helper: wait for “Your video is processing...” to appear (if it does) then disappear
+async function waitProcessing(container: Locator, totalTimeout = 30_000) {
+  const t0 = Date.now();
+  const left = () => Math.max(1000, totalTimeout - (Date.now() - t0));
+  const msg = container.getByText(/^Your video is processing\.\.\.$/i);
+  await msg.waitFor({ state: 'visible', timeout: 5_000 }).catch(() => {}); // may be brief or absent
+  await msg.waitFor({ state: 'hidden',  timeout: left() }).catch(() => {});
+}
+
+{
+  const videoBlock = sectionByHeading(page, 'Video Recording Field');
+  await videoBlock.scrollIntoViewIfNeeded().catch(() => {});
+
+  // Buttons (accept both exact labels and data-testids)
+  const startBtn = videoBlock
+    .getByRole('button', { name: /^start recording$/i })
+    .or(videoBlock.locator('[data-testid="start-recording"], button:has-text("Start Recording")'));
+
+  const stopBtn = videoBlock
+    .getByRole('button', { name: /^stop recording$/i })
+    .or(videoBlock.locator('[data-testid="stop-recording"], button:has-text("Stop Recording")'));
+
+  const reRecordBtn = videoBlock
+    .getByRole('button', { name: /^rerecord$/i })
+    .or(videoBlock.locator('[data-testid="re-record"], button:has-text("Rerecord")'));
+
+  const processing = videoBlock
+    .getByText(/^Your video is processing\.\.\.$/i)
+    .or(videoBlock.locator('[aria-live="polite"]:has-text("Your video is processing..."), [data-testid="video-processing"]'));
+
+  const previewVid = videoBlock.locator('video, video[controls]');
+
+  // Make sure camera/mic permissions are in place (especially if this test creates its own context)
+  await context.grantPermissions(['camera', 'microphone'], { origin: 'https://sample.test-embark.com' });
+
+  // ---- State-aware start logic ----
+  if (await reRecordBtn.first().isVisible().catch(() => false)) {
+    // Rerecord auto-starts recording → expect Stop to appear
+    await reRecordBtn.first().click();
+    await expect(stopBtn.first()).toBeVisible({ timeout: 15_000 });
+  } else {
+    // Fresh state → click Start Recording, then expect Stop
+    await expect(startBtn.first()).toBeVisible({ timeout: 15_000 });
+    await startBtn.first().click();
+    await expect(stopBtn.first()).toBeVisible({ timeout: 15_000 });
+  }
+
+  // Let it capture for ~2s
+  await page.waitForTimeout(2000);
+
+  // Stop recording
+  await stopBtn.first().click();
+
+  // Processing → done
+  await processing.first().waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
+  await processing.first().waitFor({ state: 'hidden',  timeout: 25_000 }).catch(() => {});
+  // or: await waitProcessing(videoBlock);
+
+  // Preview appears and Rerecord is available again
+  await expect(previewVid).toBeVisible({ timeout: 10_000 });
+  await expect(reRecordBtn.first()).toBeVisible();
+
+  // Optional: try to play; don’t hard-fail if autoplay is blocked in headless/fake media
+  const played = await previewVid.first().evaluate(async (v: HTMLVideoElement) => {
+    try {
+      await v.play();
+      await new Promise(r => setTimeout(r, 500));
+      return !v.paused;
+    } catch {
+      return false;
+    }
+  });
+  
 }
 
 
