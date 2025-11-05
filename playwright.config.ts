@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import path from 'path';
 
 /**
  * Read environment variables from file.
@@ -38,7 +39,17 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+          use: {
+            ...devices['Desktop Chrome'],
+            permissions: ['camera', 'microphone'],
+            launchOptions: {
+              args: [
+                '--use-fake-ui-for-media-stream',       // auto-accept camera/mic dialogs
+                '--use-fake-device-for-media-stream',   // use a virtual camera device
+                `--use-file-for-fake-video-capture=${path.resolve(__dirname, 'tests/fixtures/fake-video.y4m')}`,
+              ],
+            },
+          },
     },
 
     // {
